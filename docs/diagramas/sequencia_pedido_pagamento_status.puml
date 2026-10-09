@@ -1,0 +1,94 @@
+@startuml sequencia_pedido_pagamento_status
+skinparam shadowing false
+skinparam dpi 150
+skinparam sequenceMessageAlign left
+autonumber
+
+title Sequencia - Pedido > Pagamento mock > Atualizacao de status
+
+actor Cliente
+participant "API REST" as API
+participant PedidoService as PS
+participant PagamentoService as PG
+participant GatewayMock as GW
+database "Banco de dados" as DB
+actor Cozinha
+
+== Etapa 1 - Criar pedido ==
+
+Cliente -> API : POST /pedidos (canalPedido, unidadeId, itens, requestId)
+API -> API : valida JWT, perfil CLIENTE e corpo da requisicao
+alt sem token (401), sem permissao (403) ou canalPedido invalido (422)
+  API --> Cliente : erro padronizado
+end
+API -> PS : criarPedido(dto, usuario)
+PS -> DB : busca pedido por requestId
+alt requestId ja usado
+  DB --> PS : pedido existente
+  PS --> API : pedido existente
+  API --> Cliente : 200 (mesmo pedido, sem duplicar)
+else novo pedido
+  PS -> DB : busca unidade, produtos e estoque
+  alt unidade ou produto inexistente
+    PS --> API : NAO_ENCONTRADO
+    API --> Cliente : 404
+  else estoque insuficiente ou item indisponivel
+    PS --> API : ESTOQUE_INSUFICIENTE
+    API --> Cliente : 409
+  else itens validos
+    PS -> DB : transacao - salva PEDIDO e ITEM_PEDIDO, baixa ESTOQUE, grava LOG_AUDITORIA
+    PS --> API : pedido AGUARDANDO_PAGAMENTO
+    API --> Cliente : 201 pedido criado
+  end
+end
+
+== Etapa 2 - Pagamento mock ==
+
+Cliente -> API : POST /pagamentos (pedidoId, metodo MOCK)
+API -> PG : solicitarPagamento(pedidoId, usuario)
+PG -> DB : busca pedido e valida dono e status AGUARDANDO_PAGAMENTO
+alt pedido nao esta aguardando pagamento
+  PG --> API : CONFLITO
+  API --> Cliente : 409
+else pedido aguardando pagamento
+  PG -> DB : salva PAGAMENTO com status PENDENTE
+  PG -> GW : cobrar(valor, pedidoId)
+  alt gateway aprova
+    GW --> PG : APROVADO + transacaoId + payload
+    PG -> DB : PAGAMENTO APROVADO, PEDIDO PAGO, pontos se houver consentimento, LOG_AUDITORIA
+    PG --> API : pagamento APROVADO
+    API --> Cliente : 200 status APROVADO + payload (pedido PAGO)
+  else gateway recusa
+    GW --> PG : RECUSADO + motivo no payload
+    PG -> DB : PAGAMENTO RECUSADO, pedido segue AGUARDANDO_PAGAMENTO, LOG_AUDITORIA
+    PG --> API : pagamento RECUSADO
+    API --> Cliente : 200 status RECUSADO + payload
+  else gateway indisponivel
+    GW ->x PG : timeout
+    PG -> DB : PAGAMENTO segue PENDENTE, LOG_AUDITORIA
+    PG --> API : falha na integracao
+    API --> Cliente : 503 (pode tentar novamente)
+  end
+end
+
+== Etapa 3 - Atualizar status ==
+
+Cozinha -> API : PATCH /pedidos/{id}/status (EM_PREPARO)
+API -> API : valida JWT e perfil (COZINHA, ATENDENTE ou GERENTE da unidade)
+API -> PS : atualizarStatus(id, novoStatus, usuario)
+PS -> DB : busca pedido e valida transicao
+alt transicao invalida
+  PS --> API : CONFLITO
+  API --> Cozinha : 409
+else transicao valida
+  PS -> DB : atualiza status e grava LOG_AUDITORIA (STATUS_ALTERADO)
+  PS --> API : pedido atualizado
+  API --> Cozinha : 200 status EM_PREPARO
+end
+
+note over DB, Cozinha
+  Repete para PRONTO e ENTREGUE.
+  Cancelar segue o mesmo caminho e devolve o estoque.
+end note
+
+@enduml
