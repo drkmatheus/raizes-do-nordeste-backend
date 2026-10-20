@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from app.application.schemas.pedido_schemas import PedidoCriar
 from app.application.services.auditoria_service import AuditoriaService
 from app.core.errors import AppError
-from app.domain.enums import CanalPedido, StatusPedido
+from app.domain.enums import CanalPedido, PERFIS_STAFF, Perfil, StatusPedido
 from app.domain.models.pedido import Pedido
+from app.domain.models.usuario import Usuario
 from app.infrastructure.repositories.estoque_repository import EstoqueRepository
 from app.infrastructure.repositories.pedido_repository import PedidoRepository
 from app.infrastructure.repositories.produto_repository import ProdutoRepository
@@ -72,22 +73,51 @@ class PedidoService:
         self.session.commit()
         return pedido, True
 
-    def buscar(self, pedidoId: int) -> Pedido:
+    def buscar(self, pedidoId: int, usuario: Usuario | None = None) -> Pedido:
         pedido = self.repo.obterPorId(pedidoId)
         if pedido is None:
+            raise AppError(404, "PEDIDO_NAO_ENCONTRADO", f"Pedido {pedidoId} nao encontrado.")
+        # Ownership: CLIENTE so acessa o proprio pedido. Para nao revelar a
+        # existencia de pedidos alheios, respondemos 404 (e nao 403)
+        if usuario is not None and not self._podeVerTodos(usuario) \
+                and pedido.clienteId != usuario.id:
             raise AppError(404, "PEDIDO_NAO_ENCONTRADO", f"Pedido {pedidoId} nao encontrado.")
         return pedido
 
     def listar(self, limite: int, deslocamento: int,
                canalPedido: CanalPedido | None = None,
-               status: StatusPedido | None = None) -> list[Pedido]:
-        return self.repo.listar(limite, deslocamento, canalPedido, status)
+               status: StatusPedido | None = None,
+               usuario: Usuario | None = None) -> list[Pedido]:
+        # CLIENTE enxerga apenas os proprios pedidos; staff enxerga todos.
+        clienteId = None
+        if usuario is not None and not self._podeVerTodos(usuario):
+            clienteId = usuario.id
+        return self.repo.listar(limite, deslocamento, canalPedido, status, clienteId)
+
+    @staticmethod
+    def _podeVerTodos(usuario: Usuario) -> bool:
+        return usuario.perfil in PERFIS_STAFF
+
+    @staticmethod
+    def _validarUnidade(pedido: Pedido, usuario: Usuario | None) -> None:
+        """ GERENTE so opera pedidos da propria unidade; ADMIN e global
+
+        Demais perfis de staff (ATENDENTE/COZINHA) seguem a regra anterior"""
+        if usuario is None or usuario.perfil != Perfil.GERENTE:
+            return
+        if usuario.unidadeId is not None and usuario.unidadeId != pedido.unidadeId:
+            raise AppError(
+                403, "SEM_PERMISSAO",
+                "Gerente so pode operar pedidos da propria unidade.",
+            )
 
     def atualizarStatus(self, pedidoId: int, novo: StatusPedido,
-                        usuarioId: int | None = None) -> Pedido:
+                        usuario: Usuario | None = None) -> Pedido:
+        usuarioId = usuario.id if usuario is not None else None
         pedido = self.repo.obterPorIdParaAtualizar(pedidoId)
         if pedido is None:
             raise AppError(404, "PEDIDO_NAO_ENCONTRADO", f"Pedido {pedidoId} nao encontrado.")
+        self._validarUnidade(pedido, usuario)
 
         if novo == StatusPedido.CANCELADO:
             return self._cancelar(pedido, usuarioId)
@@ -105,10 +135,12 @@ class PedidoService:
         self.session.commit()
         return pedido
 
-    def cancelar(self, pedidoId: int, usuarioId: int | None = None) -> Pedido:
+    def cancelar(self, pedidoId: int, usuario: Usuario | None = None) -> Pedido:
+        usuarioId = usuario.id if usuario is not None else None
         pedido = self.repo.obterPorIdParaAtualizar(pedidoId)
         if pedido is None:
             raise AppError(404, "PEDIDO_NAO_ENCONTRADO", f"Pedido {pedidoId} nao encontrado.")
+        self._validarUnidade(pedido, usuario)
         return self._cancelar(pedido, usuarioId)
 
     def _cancelar(self, pedido: Pedido, usuarioId: int | None) -> Pedido:

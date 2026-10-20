@@ -2,6 +2,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.application.schemas.usuario_schemas import UsuarioCriar
+from app.application.services.auditoria_service import AuditoriaService
 from app.core.errors import AppError
 from app.core.security import hash_senha
 from app.domain.enums import Perfil
@@ -12,6 +13,7 @@ class UsuarioService:
     def __init__(self, session: Session):
         self.session = session
         self.repo = UsuarioRepository(session)
+        self.auditoria = AuditoriaService(session)
 
     def criar(self, dados: UsuarioCriar) -> Usuario:
         email = dados.email.lower()
@@ -28,6 +30,14 @@ class UsuarioService:
         )
         try:
             self.repo.adicionar(usuario)
+            # Registra o consentimento declarado no cadastro (rastreabilidade LGPD)
+            self.auditoria.registrar(
+                "CONSENTIMENTO_REGISTRADO", "usuario", usuario.id, usuario.id,
+                {
+                    "consentimentoLgpd": usuario.consentimentoLgpd,
+                    "consentimentoFidelidade": usuario.consentimentoFidelidade,
+                },
+            )
             self.session.commit()
         except IntegrityError:  # evita race condition caso outro request tenha criado o mesmo email
             self.session.rollback()
@@ -43,11 +53,15 @@ class UsuarioService:
     def listar(self, limite: int, deslocamento: int) -> list[Usuario]:
         return self.repo.listar(limite, deslocamento)
 
-    def anonimizar(self, usuarioId: int) -> None:
+    def anonimizar(self, usuarioId: int, solicitanteId: int | None = None) -> None:
         usuario = self.repo.obterPorIdParaAtualizar(usuarioId)
         if usuario is None:
             raise self._naoEncontrado(usuarioId)
         usuario.anonimizar()
+        # Trilha LGPD: registra quem anonimizou qual usuario (sem dados pessoais)
+        self.auditoria.registrar(
+            "USUARIO_ANONIMIZADO", "usuario", usuarioId, solicitanteId,
+        )
         self.session.commit()
 
     @staticmethod

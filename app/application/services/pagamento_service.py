@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 from app.application.schemas.pagamento_schemas import PagamentoCriar
 from app.application.services.auditoria_service import AuditoriaService
 from app.core.errors import AppError
-from app.domain.enums import StatusPedido, TipoPontos
+from app.domain.enums import PERFIS_STAFF, StatusPedido, TipoPontos
 from app.domain.models.historico_fidelidade import HistoricoFidelidade
 from app.domain.models.pagamento import Pagamento
+from app.domain.models.usuario import Usuario
 from app.infrastructure.gateways.pagamento_mock import (
     GatewayIndisponivelError,
     PagamentoMockGateway,
@@ -29,11 +30,13 @@ class PagamentoService:
         self.auditoria = AuditoriaService(session)
         self.gateway = gateway or PagamentoMockGateway()
 
-    def solicitar(self, dados: PagamentoCriar, usuarioId: int | None = None) -> Pagamento:
+    def solicitar(self, dados: PagamentoCriar, usuario: Usuario | None = None) -> Pagamento:
+        usuarioId = usuario.id if usuario is not None else None
         pedido = self.pedidos.obterPorIdParaAtualizar(dados.pedidoId)
         if pedido is None:
             raise AppError(404, "PEDIDO_NAO_ENCONTRADO",
                            f"Pedido {dados.pedidoId} nao encontrado.")
+        self._validarDono(pedido, usuario)
         if pedido.status != StatusPedido.AGUARDANDO_PAGAMENTO:
             raise AppError(
                 409, "PEDIDO_NAO_AGUARDA_PAGAMENTO",
@@ -80,6 +83,20 @@ class PagamentoService:
         self.session.commit()
         return pagamento
 
+    @staticmethod
+    def _validarDono(pedido, usuario: Usuario | None) -> None:
+        """ CLIENTE so paga/consulta o proprio pedido; staff pode operar qualquer um
+
+        Pedido sem cliente (ex.: TOTEM/BALCAO) so e operavel por staff"""
+        if usuario is None:
+            return
+        if usuario.perfil in PERFIS_STAFF:
+            return
+        # Para nao revelar a existencia de pedidos alheios, respondemos 404.
+        if pedido.clienteId != usuario.id:
+            raise AppError(404, "PEDIDO_NAO_ENCONTRADO",
+                           f"Pedido {pedido.id} nao encontrado.")
+
     def _creditarPontos(self, pedido, usuarioId: int | None) -> None:
         """ Acumula pontos somente se: houver cliente e consentimento de fidelidade"""
         if pedido.clienteId is None:
@@ -98,7 +115,9 @@ class PagamentoService:
             )
         )
 
-    def listarPorPedido(self, pedidoId: int) -> list[Pagamento]:
-        if self.pedidos.obterPorId(pedidoId) is None:
+    def listarPorPedido(self, pedidoId: int, usuario: Usuario | None = None) -> list[Pagamento]:
+        pedido = self.pedidos.obterPorId(pedidoId)
+        if pedido is None:
             raise AppError(404, "PEDIDO_NAO_ENCONTRADO", f"Pedido {pedidoId} nao encontrado.")
+        self._validarDono(pedido, usuario)
         return self.repo.listarPorPedido(pedidoId)
