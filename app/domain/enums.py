@@ -1,4 +1,3 @@
-"""Enums de dominio. Sincronizando estado, status e perfil com nome/valor retornado pela API"""
 from enum import Enum
 
 class Perfil(str, Enum):
@@ -8,6 +7,11 @@ class Perfil(str, Enum):
     GERENTE = "GERENTE"
     ADMIN = "ADMIN"
 
+# Perfis de staff. Usado para distinguir acesso de CLIENTE x equipe:
+# CLIENTE so enxerga os proprios recursos; staff enxerga todos
+PERFIS_STAFF = frozenset({
+    Perfil.ATENDENTE, Perfil.COZINHA, Perfil.GERENTE, Perfil.ADMIN,
+})
 
 class CanalPedido(str, Enum):
     APP = "APP"
