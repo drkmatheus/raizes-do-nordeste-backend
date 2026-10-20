@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import exigir_perfil, get_db
+from app.api.responses import respostas
 from app.application.schemas.produto_schemas import (
     ProdutoAtualizar,
     ProdutoCriar,
@@ -18,7 +19,8 @@ def get_service(db: Session = Depends(get_db)) -> ProdutoService:
 
 
 @router.post("", response_model=ProdutoResposta, status_code=status.HTTP_201_CREATED,
-             dependencies=[Depends(exigir_perfil(Perfil.GERENTE, Perfil.ADMIN))])
+             dependencies=[Depends(exigir_perfil(Perfil.GERENTE, Perfil.ADMIN))],
+             responses=respostas(401, 403, 422))
 def criar(dados: ProdutoCriar, service: ProdutoService = Depends(get_service)):
     return service.criar(dados)
 
@@ -34,13 +36,14 @@ def listar(
     return service.listar(limite, deslocamento, apenasAtivos)
 
 
-@router.get("/{produto_id}", response_model=ProdutoResposta)
+@router.get("/{produto_id}", response_model=ProdutoResposta, responses=respostas(404))
 def obter(produto_id: int, service: ProdutoService = Depends(get_service)):
     return service.buscar(produto_id)
 
 
 @router.patch("/{produto_id}", response_model=ProdutoResposta,
-              dependencies=[Depends(exigir_perfil(Perfil.GERENTE, Perfil.ADMIN))])
+              dependencies=[Depends(exigir_perfil(Perfil.GERENTE, Perfil.ADMIN))],
+              responses=respostas(401, 403, 404, 422))
 def atualizar(produto_id: int, dados: ProdutoAtualizar,
               service: ProdutoService = Depends(get_service)):
     return service.atualizar(produto_id, dados)

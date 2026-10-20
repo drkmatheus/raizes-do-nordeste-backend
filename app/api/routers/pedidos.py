@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import exigir_perfil, get_db, get_usuario_logado
+from app.api.responses import respostas
 from app.application.schemas.pedido_schemas import (
     AtualizarStatusRequest,
     PedidoCriar,
@@ -20,7 +21,8 @@ def get_service(db: Session = Depends(get_db)) -> PedidoService:
     return PedidoService(db)
 
 
-@router.post("", response_model=PedidoResposta, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PedidoResposta, status_code=status.HTTP_201_CREATED,
+             responses=respostas(401, 404, 409, 422))
 def criar(dados: PedidoCriar, response: Response,
           service: PedidoService = Depends(get_service),
           usuario: Usuario = Depends(get_usuario_logado)):
@@ -33,35 +35,44 @@ def criar(dados: PedidoCriar, response: Response,
     return pedido
 
 
-@router.get("", response_model=list[PedidoResposta])
+@router.get("", response_model=list[PedidoResposta], responses=respostas(401))
 def listar(
     canalPedido: CanalPedido | None = Query(None, description="Filtra por canal de origem"),
     status_: StatusPedido | None = Query(None, alias="status"),
     limite: int = Query(50, ge=1, le=100),
     deslocamento: int = Query(0, ge=0),
     service: PedidoService = Depends(get_service),
-    _usuario: Usuario = Depends(get_usuario_logado),
+    usuario: Usuario = Depends(get_usuario_logado),
 ):
-    """ Lista pedidos, com filtro por canal (?canalPedido=TOTEM) e status"""
-    return service.listar(limite, deslocamento, canalPedido, status_)
+    """ Lista pedidos, com filtro por canal (?canalPedido=TOTEM) e status.
+
+    CLIENTE enxerga apenas os proprios pedidos; equipe (staff) enxerga todos."""
+    return service.listar(limite, deslocamento, canalPedido, status_, usuario)
 
 
-@router.get("/{pedido_id}", response_model=PedidoResposta)
+@router.get("/{pedido_id}", response_model=PedidoResposta, responses=respostas(401, 404))
 def obter(pedido_id: int, service: PedidoService = Depends(get_service),
-          _usuario: Usuario = Depends(get_usuario_logado)):
-    return service.buscar(pedido_id)
+          usuario: Usuario = Depends(get_usuario_logado)):
+    """ Detalha um pedido. CLIENTE so acessa o proprio pedido."""
+    return service.buscar(pedido_id, usuario)
 
 
-@router.patch("/{pedido_id}/status", response_model=PedidoResposta)
+@router.patch("/{pedido_id}/status", response_model=PedidoResposta,
+              responses=respostas(401, 403, 404, 409, 422))
 def atualizar_status(pedido_id: int, dados: AtualizarStatusRequest,
                      service: PedidoService = Depends(get_service),
                      usuario: Usuario = Depends(_operacao)):
-    """ Atualiza o status do pedido (cozinha -> pronto -> entregue / cancelado)"""
-    return service.atualizarStatus(pedido_id, dados.status, usuario.id)
+    """ Atualiza o status do pedido (cozinha -> pronto -> entregue / cancelado).
+
+    GERENTE so opera pedidos da propria unidade; ADMIN e global."""
+    return service.atualizarStatus(pedido_id, dados.status, usuario)
 
 
-@router.post("/{pedido_id}/cancelar", response_model=PedidoResposta)
+@router.post("/{pedido_id}/cancelar", response_model=PedidoResposta,
+             responses=respostas(401, 403, 404, 409))
 def cancelar(pedido_id: int, service: PedidoService = Depends(get_service),
              usuario: Usuario = Depends(_operacao)):
-    """ Cancela o pedido e devolve o estoque reservado"""
-    return service.cancelar(pedido_id, usuario.id)
+    """ Cancela o pedido e devolve o estoque reservado.
+
+    GERENTE so cancela pedidos da propria unidade; ADMIN e global."""
+    return service.cancelar(pedido_id, usuario)

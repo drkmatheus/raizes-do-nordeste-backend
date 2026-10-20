@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from app.api.deps import get_db, get_usuario_logado
+from app.api.responses import respostas
 from app.application.schemas.fidelidade_schemas import (
     HistoricoResposta,
     ResgatarPontosRequest,
@@ -17,7 +18,7 @@ def get_service(db: Session = Depends(get_db)) -> FidelidadeService:
     return FidelidadeService(db)
 
 
-@router.get("/saldo", response_model=SaldoResposta)
+@router.get("/saldo", response_model=SaldoResposta, responses=respostas(401, 404))
 def saldo(service: FidelidadeService = Depends(get_service),
           usuario: Usuario = Depends(get_usuario_logado)):
     """ Saldo de pontos do usuario autenticado"""
@@ -28,7 +29,8 @@ def saldo(service: FidelidadeService = Depends(get_service),
     )
 
 
-@router.post("/resgates", response_model=SaldoResposta)
+@router.post("/resgates", response_model=SaldoResposta,
+             responses=respostas(401, 403, 404, 409, 422))
 def resgatar(dados: ResgatarPontosRequest, service: FidelidadeService = Depends(get_service),
              usuario: Usuario = Depends(get_usuario_logado)):
     """ Resgata pontos do usuario autenticado (exige consentimento e saldo)"""
@@ -39,7 +41,7 @@ def resgatar(dados: ResgatarPontosRequest, service: FidelidadeService = Depends(
     )
 
 
-@router.get("/historico", response_model=list[HistoricoResposta])
+@router.get("/historico", response_model=list[HistoricoResposta], responses=respostas(401))
 def historico(
     limite: int = Query(50, ge=1, le=100),
     deslocamento: int = Query(0, ge=0),

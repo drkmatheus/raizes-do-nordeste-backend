@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import exigir_perfil, get_db
+from app.api.responses import respostas
 from app.application.schemas.estoque_schemas import (
     EstoqueCriar,
     EstoqueResposta,
@@ -21,13 +22,14 @@ def get_service(db: Session = Depends(get_db)) -> EstoqueService:
 
 
 @router.post("", response_model=EstoqueResposta, status_code=status.HTTP_201_CREATED,
-             dependencies=[Depends(_gestor)])
+             dependencies=[Depends(_gestor)], responses=respostas(401, 403, 404, 409, 422))
 def criar(dados: EstoqueCriar, service: EstoqueService = Depends(get_service)):
     """ Cria o registro de estoque de um produto em uma unidade"""
     return service.criar(dados)
 
 
-@router.get("/unidades/{unidade_id}", response_model=list[EstoqueResposta])
+@router.get("/unidades/{unidade_id}", response_model=list[EstoqueResposta],
+            responses=respostas(404))
 def listar_por_unidade(
     unidade_id: int,
     limite: int = Query(50, ge=1, le=100),
@@ -38,14 +40,15 @@ def listar_por_unidade(
     return service.listarPorUnidade(unidade_id, limite, deslocamento)
 
 
-@router.get("/unidades/{unidade_id}/produtos/{produto_id}", response_model=EstoqueResposta)
+@router.get("/unidades/{unidade_id}/produtos/{produto_id}", response_model=EstoqueResposta,
+            responses=respostas(404))
 def consultar_saldo(unidade_id: int, produto_id: int,
                     service: EstoqueService = Depends(get_service)):
     return service.consultarSaldo(unidade_id, produto_id)
 
 
 @router.post("/unidades/{unidade_id}/produtos/{produto_id}/entradas",
-             response_model=EstoqueResposta)
+             response_model=EstoqueResposta, responses=respostas(401, 403, 404, 422))
 def entrada(unidade_id: int, produto_id: int, dados: MovimentacaoEstoque,
             service: EstoqueService = Depends(get_service),
             usuario: Usuario = Depends(_gestor)):
@@ -54,7 +57,7 @@ def entrada(unidade_id: int, produto_id: int, dados: MovimentacaoEstoque,
 
 
 @router.post("/unidades/{unidade_id}/produtos/{produto_id}/saidas",
-             response_model=EstoqueResposta)
+             response_model=EstoqueResposta, responses=respostas(401, 403, 404, 409, 422))
 def saida(unidade_id: int, produto_id: int, dados: MovimentacaoEstoque,
           service: EstoqueService = Depends(get_service),
           usuario: Usuario = Depends(_gestor)):

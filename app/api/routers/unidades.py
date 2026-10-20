@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import exigir_perfil, get_db
+from app.api.responses import respostas
 from app.application.schemas.unidade_schemas import UnidadeCriar, UnidadeResposta
 from app.application.services.unidade_service import UnidadeService
 from app.domain.enums import Perfil
@@ -14,7 +15,8 @@ def get_service(db: Session = Depends(get_db)) -> UnidadeService:
 
 
 @router.post("", response_model=UnidadeResposta, status_code=status.HTTP_201_CREATED,
-             dependencies=[Depends(exigir_perfil(Perfil.ADMIN))])
+             dependencies=[Depends(exigir_perfil(Perfil.ADMIN))],
+             responses=respostas(401, 403, 422))
 def criar(dados: UnidadeCriar, service: UnidadeService = Depends(get_service)):
     return service.criar(dados)
 
@@ -29,6 +31,6 @@ def listar(
     return service.listar(limite, deslocamento)
 
 
-@router.get("/{unidade_id}", response_model=UnidadeResposta)
+@router.get("/{unidade_id}", response_model=UnidadeResposta, responses=respostas(404))
 def obter(unidade_id: int, service: UnidadeService = Depends(get_service)):
     return service.buscar(unidade_id)

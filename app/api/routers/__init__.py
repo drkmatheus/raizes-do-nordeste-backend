@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routers import (
+    auditoria,
     auth,
     estoque,
     fidelidade,
@@ -20,3 +21,4 @@ api_router.include_router(estoque.router, prefix="/estoque", tags=["Estoque"])
 api_router.include_router(pedidos.router, prefix="/pedidos", tags=["Pedidos"])
 api_router.include_router(pagamentos.router, prefix="/pagamentos", tags=["Pagamentos"])
 api_router.include_router(fidelidade.router, prefix="/fidelidade", tags=["Fidelidade"])
+api_router.include_router(auditoria.router, prefix="/auditoria", tags=["Auditoria"])
