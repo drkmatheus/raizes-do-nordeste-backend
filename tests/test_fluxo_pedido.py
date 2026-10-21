@@ -89,6 +89,31 @@ def test_pedido_estoque_insuficiente_retorna_409(client, auth_header, seed):  # 
     assert resp.json()["error"] == "ESTOQUE_INSUFICIENTE"
 
 
+def test_pedido_com_produto_repetido_valida_quantidade_total_e_nao_baixa_estoque(
+    client, auth_header, seed
+):
+    header = auth_header("cliente")
+    body = {
+        "canalPedido": "TOTEM",
+        "unidadeId": seed["unidadeId"],
+        "itens": [
+            {"produtoId": seed["produtoId"], "quantidade": 6},
+            {"produtoId": seed["produtoId"], "quantidade": 6},
+        ],
+    }
+
+    resp = client.post("/pedidos", json=body, headers=header)
+
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "ESTOQUE_INSUFICIENTE"
+    saldo = client.get(
+        f"/estoque/unidades/{seed['unidadeId']}/produtos/{seed['produtoId']}",
+        headers=auth_header("gerente"),
+    )
+    assert saldo.status_code == 200
+    assert saldo.json()["quantidade"] == 10
+
+
 def test_filtro_por_canal(client, auth_header, seed):  # T11
     _criar_pedido(client, auth_header("cliente"), seed, quantidade=1, canal="TOTEM")
     _criar_pedido(client, auth_header("cliente"), seed, quantidade=1, canal="APP")

@@ -40,27 +40,33 @@ class PedidoService:
             requestId=dados.requestId,
         )
 
-        # Valida produtos/estoque e baixa estoque na mesma transacao.
+        # Valida produtos/estoque e baixa estoque na mesma transacao
         estoques_para_baixar: list[tuple] = []
+        quantidades_por_produto: dict[int, int] = {}
         for item in dados.itens:
-            produto = self.produtos.obterPorId(item.produtoId)
+            quantidades_por_produto[item.produtoId] = (
+                quantidades_por_produto.get(item.produtoId, 0) + item.quantidade
+            )
+
+        for produtoId, quantidade in quantidades_por_produto.items():
+            produto = self.produtos.obterPorId(produtoId)
             if produto is None:
                 raise AppError(404, "PRODUTO_NAO_ENCONTRADO",
-                               f"Produto {item.produtoId} nao encontrado.")
+                               f"Produto {produtoId} nao encontrado.")
             if not produto.ativo:
                 raise AppError(409, "PRODUTO_INDISPONIVEL",
-                               f"Produto {item.produtoId} esta inativo.")
+                               f"Produto {produtoId} esta inativo.")
 
-            estoque = self.estoque.obterParaAtualizar(dados.unidadeId, item.produtoId)
-            if estoque is None or not estoque.temSaldo(item.quantidade):
+            estoque = self.estoque.obterParaAtualizar(dados.unidadeId, produtoId)
+            if estoque is None or not estoque.temSaldo(quantidade):
                 disponivel = estoque.quantidade if estoque else 0
                 raise AppError(
                     409, "ESTOQUE_INSUFICIENTE",
                     "Nao ha quantidade suficiente para um ou mais itens.",
-                    [{"field": f"produto {item.produtoId}", "issue": f"Disponivel: {disponivel}"}],
+                    [{"field": f"produto {produtoId}", "issue": f"Disponivel: {disponivel}"}],
                 )
-            pedido.adicionarItem(produto, item.quantidade)
-            estoques_para_baixar.append((estoque, item.quantidade))
+            pedido.adicionarItem(produto, quantidade)
+            estoques_para_baixar.append((estoque, quantidade))
 
         self.repo.adicionar(pedido)
         for estoque, qtd in estoques_para_baixar:
