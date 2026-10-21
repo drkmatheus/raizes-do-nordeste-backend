@@ -1,0 +1,121 @@
+@startuml der_raizes_do_nordeste
+hide circle
+skinparam linetype ortho
+skinparam shadowing false
+skinparam dpi 150
+
+title DER - Raizes do Nordeste
+
+entity USUARIO {
+  *id : int <<PK>>
+  --
+  unidade_id : int <<FK>>
+  *nome : string
+  *email : string <<UK>>
+  *senha_hash : string
+  *perfil : Perfil
+  *saldo_pontos : int
+  *consentimento_lgpd : boolean
+  *consentimento_fidelidade : boolean
+  consentimento_data : datetime
+  *created_at : datetime
+  anonimizado_em : datetime
+}
+
+entity UNIDADE {
+  *id : int <<PK>>
+  --
+  *nome : string
+  *tipo : string
+  endereco : string
+  *cnpj : string <<UK>>
+}
+
+entity PRODUTO {
+  *id : int <<PK>>
+  --
+  *nome : string
+  descricao : string
+  *preco : decimal
+  categoria : string
+  *ativo : boolean
+}
+
+entity ESTOQUE {
+  *id : int <<PK>>
+  --
+  *unidade_id : int <<FK, UK composto>>
+  *produto_id : int <<FK, UK composto>>
+  *quantidade : int
+  *disponivel : boolean
+}
+
+entity PEDIDO {
+  *id : int <<PK>>
+  --
+  cliente_id : int <<FK>>
+  *unidade_id : int <<FK>>
+  *canal_pedido : CanalPedido
+  *status : StatusPedido
+  *valor_desconto : decimal
+  *valor_total : decimal
+  request_id : string <<UK>>
+  *data_criacao : datetime
+  *data_atualizacao : datetime
+}
+
+entity ITEM_PEDIDO {
+  *id : int <<PK>>
+  --
+  *pedido_id : int <<FK, UK composto>>
+  *produto_id : int <<FK, UK composto>>
+  *quantidade : int
+  *preco_unitario : decimal
+}
+
+entity PAGAMENTO {
+  *id : int <<PK>>
+  --
+  *pedido_id : int <<FK>>
+  *metodo : string
+  *status : StatusPagamento
+  gateway_transacao_id : string <<UK>>
+  *valor : decimal
+  payload_resposta : json
+  *data_hora : datetime
+}
+
+entity HISTORICO_FIDELIDADE {
+  *id : int <<PK>>
+  --
+  *usuario_id : int <<FK>>
+  pedido_id : int <<FK>>
+  *tipo : TipoPontos
+  *pontos : int
+  *data_hora : datetime
+}
+
+entity LOG_AUDITORIA {
+  *id : int <<PK>>
+  --
+  usuario_id : int <<FK>>
+  *acao : string
+  *entidade : string
+  entidade_id : int
+  *data_hora : datetime
+  detalhes : json
+}
+
+UNIDADE |o--o{ USUARIO : emprega
+USUARIO |o--o{ PEDIDO : realiza
+USUARIO ||--o{ HISTORICO_FIDELIDADE : acumula
+USUARIO |o--o{ LOG_AUDITORIA : gera
+UNIDADE ||--o{ ESTOQUE : possui
+UNIDADE ||--o{ PEDIDO : recebe
+PRODUTO ||--o{ ESTOQUE : compoe
+PRODUTO ||--o{ ITEM_PEDIDO : contem
+PEDIDO ||--|{ ITEM_PEDIDO : possui
+PEDIDO ||--o{ PAGAMENTO : gera
+PEDIDO |o--o{ HISTORICO_FIDELIDADE : pontua
+
+@enduml
