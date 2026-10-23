@@ -1,0 +1,320 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "raizes-do-nordeste",
+  "resources": [
+    {
+      "_id": "wrk_raizes",
+      "_type": "workspace",
+      "name": "Raizes do Nordeste - API",
+      "description": "Colecao do fluxo critico: Auth -> Pedido -> Pagamento mock -> Status, com cenarios de erro."
+    },
+    {
+      "_id": "env_base",
+      "_type": "environment",
+      "parentId": "wrk_raizes",
+      "name": "Local",
+      "data": {
+        "base_url": "http://localhost:8000",
+        "token": "",
+        "pedidoId": "",
+        "unidadeId": 1,
+        "produtoId": 1
+      }
+    },
+
+    { "_id": "fld_auth", "_type": "request_group", "parentId": "wrk_raizes", "name": "01 - Auth", "metaSortKey": -100 },
+    {
+      "_id": "req_login", "_type": "request", "parentId": "fld_auth", "metaSortKey": -100,
+      "name": "T01 - Login valido (cliente)",
+      "method": "POST", "url": "{{ _.base_url }}/auth/login",
+      "body": { "mimeType": "application/json", "text": "{\n  \"email\": \"cliente@raizes.com\",\n  \"senha\": \"Senha@123\"\n}" },
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "description": "Faz login e retorna accessToken. Copie o accessToken para a variavel de ambiente 'token'."
+    },
+    {
+      "_id": "req_login_gerente", "_type": "request", "parentId": "fld_auth", "metaSortKey": -90,
+      "name": "Login gerente (para estoque/status)",
+      "method": "POST", "url": "{{ _.base_url }}/auth/login",
+      "body": { "mimeType": "application/json", "text": "{\n  \"email\": \"gerente@raizes.com\",\n  \"senha\": \"Senha@123\"\n}" },
+      "headers": [{ "name": "Content-Type", "value": "application/json" }]
+    },
+    {
+      "_id": "req_login_cozinha", "_type": "request", "parentId": "fld_auth", "metaSortKey": -85,
+      "name": "Login cozinha (para mudar status)",
+      "method": "POST", "url": "{{ _.base_url }}/auth/login",
+      "body": { "mimeType": "application/json", "text": "{\n  \"email\": \"cozinha@raizes.com\",\n  \"senha\": \"Senha@123\"\n}" },
+      "headers": [{ "name": "Content-Type", "value": "application/json" }]
+    },
+    {
+      "_id": "req_login_errado", "_type": "request", "parentId": "fld_auth", "metaSortKey": -80,
+      "name": "T02 - Login invalido (401)",
+      "method": "POST", "url": "{{ _.base_url }}/auth/login",
+      "body": { "mimeType": "application/json", "text": "{\n  \"email\": \"cliente@raizes.com\",\n  \"senha\": \"errada\"\n}" },
+      "headers": [{ "name": "Content-Type", "value": "application/json" }],
+      "description": "Esperado 401 CREDENCIAIS_INVALIDAS."
+    },
+    {
+      "_id": "req_me", "_type": "request", "parentId": "fld_auth", "metaSortKey": -70,
+      "name": "Perfil do usuario logado (/auth/me)",
+      "method": "GET", "url": "{{ _.base_url }}/auth/me",
+      "headers": [{ "name": "Authorization", "value": "Bearer {{ _.token }}" }]
+    },
+
+    { "_id": "fld_usuarios", "_type": "request_group", "parentId": "wrk_raizes", "name": "02 - Usuarios", "metaSortKey": -90 },
+    {
+      "_id": "req_cad_usuario", "_type": "request", "parentId": "fld_usuarios", "metaSortKey": -100,
+      "name": "Cadastrar cliente",
+      "method": "POST", "url": "{{ _.base_url }}/usuarios",
+      "body": { "mimeType": "application/json", "text": "{\n  \"nome\": \"Novo Cliente\",\n  \"email\": \"novo@raizes.com\",\n  \"senha\": \"Senha@123\",\n  \"consentimentoLgpd\": true,\n  \"consentimentoFidelidade\": true\n}" },
+      "headers": [{ "name": "Content-Type", "value": "application/json" }]
+    },
+    {
+      "_id": "req_cad_usuario_invalido", "_type": "request", "parentId": "fld_usuarios", "metaSortKey": -90,
+      "name": "T07 - Cadastro com email invalido (422)",
+      "method": "POST", "url": "{{ _.base_url }}/usuarios",
+      "body": { "mimeType": "application/json", "text": "{\n  \"nome\": \"X\",\n  \"email\": \"nao-eh-email\",\n  \"senha\": \"Senha@123\"\n}" },
+      "headers": [{ "name": "Content-Type", "value": "application/json" }]
+    },
+
+    { "_id": "fld_unidades", "_type": "request_group", "parentId": "wrk_raizes", "name": "03 - Unidades", "metaSortKey": -80 },
+    {
+      "_id": "req_listar_unidades", "_type": "request", "parentId": "fld_unidades", "metaSortKey": -100,
+      "name": "Listar unidades",
+      "method": "GET", "url": "{{ _.base_url }}/unidades?limite=10&deslocamento=0"
+    },
+
+    { "_id": "fld_produtos", "_type": "request_group", "parentId": "wrk_raizes", "name": "04 - Produtos", "metaSortKey": -70 },
+    {
+      "_id": "req_listar_produtos", "_type": "request", "parentId": "fld_produtos", "metaSortKey": -100,
+      "name": "Listar cardapio",
+      "method": "GET", "url": "{{ _.base_url }}/produtos?apenasAtivos=true&limite=10"
+    },
+    {
+      "_id": "req_criar_produto", "_type": "request", "parentId": "fld_produtos", "metaSortKey": -90,
+      "name": "Criar produto (gerente)",
+      "method": "POST", "url": "{{ _.base_url }}/produtos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"nome\": \"Cuscuz com Ovo\",\n  \"preco\": 12.50,\n  \"categoria\": \"Lanche\",\n  \"descricao\": \"Cuscuz nordestino com ovo\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "description": "Use o token do GERENTE/ADMIN. Com token de CLIENTE retorna 403."
+    },
+    {
+      "_id": "req_criar_produto_403", "_type": "request", "parentId": "fld_produtos", "metaSortKey": -80,
+      "name": "T04 - Criar produto como cliente (403)",
+      "method": "POST", "url": "{{ _.base_url }}/produtos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"nome\": \"Proibido\",\n  \"preco\": 1.00\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "description": "Com token de CLIENTE: esperado 403 SEM_PERMISSAO."
+    },
+
+    { "_id": "fld_estoque", "_type": "request_group", "parentId": "wrk_raizes", "name": "05 - Estoque", "metaSortKey": -60 },
+    {
+      "_id": "req_saldo_estoque", "_type": "request", "parentId": "fld_estoque", "metaSortKey": -100,
+      "name": "Consultar saldo por unidade/produto",
+      "method": "GET", "url": "{{ _.base_url }}/estoque/unidades/{{ _.unidadeId }}/produtos/{{ _.produtoId }}"
+    },
+    {
+      "_id": "req_listar_estoque", "_type": "request", "parentId": "fld_estoque", "metaSortKey": -95,
+      "name": "Listar estoque da unidade",
+      "method": "GET", "url": "{{ _.base_url }}/estoque/unidades/{{ _.unidadeId }}"
+    },
+    {
+      "_id": "req_entrada_estoque", "_type": "request", "parentId": "fld_estoque", "metaSortKey": -90,
+      "name": "Entrada de estoque (gerente)",
+      "method": "POST", "url": "{{ _.base_url }}/estoque/unidades/{{ _.unidadeId }}/produtos/{{ _.produtoId }}/entradas",
+      "body": { "mimeType": "application/json", "text": "{\n  \"quantidade\": 20\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+    {
+      "_id": "req_saida_estoque", "_type": "request", "parentId": "fld_estoque", "metaSortKey": -80,
+      "name": "Saida de estoque (gerente)",
+      "method": "POST", "url": "{{ _.base_url }}/estoque/unidades/{{ _.unidadeId }}/produtos/{{ _.produtoId }}/saidas",
+      "body": { "mimeType": "application/json", "text": "{\n  \"quantidade\": 5\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+
+    { "_id": "fld_pedidos", "_type": "request_group", "parentId": "wrk_raizes", "name": "06 - Pedidos", "metaSortKey": -50 },
+    {
+      "_id": "req_criar_pedido", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -100,
+      "name": "T08 - Criar pedido valido (201)",
+      "method": "POST", "url": "{{ _.base_url }}/pedidos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"canalPedido\": \"TOTEM\",\n  \"unidadeId\": {{ _.unidadeId }},\n  \"itens\": [\n    { \"produtoId\": {{ _.produtoId }}, \"quantidade\": 2 }\n  ],\n  \"requestId\": \"req-001\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "description": "Copie o 'id' retornado para a variavel de ambiente 'pedidoId'."
+    },
+    {
+      "_id": "req_listar_pedidos", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -95,
+      "name": "T11 - Listar pedidos por canal (?canalPedido=TOTEM)",
+      "method": "GET", "url": "{{ _.base_url }}/pedidos?canalPedido=TOTEM&limite=10",
+      "headers": [{ "name": "Authorization", "value": "Bearer {{ _.token }}" }]
+    },
+    {
+      "_id": "req_obter_pedido", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -90,
+      "name": "Obter pedido por id",
+      "method": "GET", "url": "{{ _.base_url }}/pedidos/{{ _.pedidoId }}",
+      "headers": [{ "name": "Authorization", "value": "Bearer {{ _.token }}" }]
+    },
+    {
+      "_id": "req_pedido_sem_token", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -85,
+      "name": "T03 - Listar pedidos sem token (401)",
+      "method": "GET", "url": "{{ _.base_url }}/pedidos"
+    },
+    {
+      "_id": "req_status_em_preparo", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -80,
+      "name": "T16 - Atualizar status EM_PREPARO (cozinha)",
+      "method": "PATCH", "url": "{{ _.base_url }}/pedidos/{{ _.pedidoId }}/status",
+      "body": { "mimeType": "application/json", "text": "{\n  \"status\": \"EM_PREPARO\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "description": "Use token de COZINHA. So funciona apos o pagamento aprovado (pedido PAGO)."
+    },
+    {
+      "_id": "req_status_pronto", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -75,
+      "name": "Atualizar status PRONTO",
+      "method": "PATCH", "url": "{{ _.base_url }}/pedidos/{{ _.pedidoId }}/status",
+      "body": { "mimeType": "application/json", "text": "{\n  \"status\": \"PRONTO\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+    {
+      "_id": "req_status_entregue", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -70,
+      "name": "Atualizar status ENTREGUE",
+      "method": "PATCH", "url": "{{ _.base_url }}/pedidos/{{ _.pedidoId }}/status",
+      "body": { "mimeType": "application/json", "text": "{\n  \"status\": \"ENTREGUE\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+    {
+      "_id": "req_status_invalido", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -65,
+      "name": "T17 - Transicao invalida (409)",
+      "method": "PATCH", "url": "{{ _.base_url }}/pedidos/{{ _.pedidoId }}/status",
+      "body": { "mimeType": "application/json", "text": "{\n  \"status\": \"PRONTO\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "description": "Em um pedido ainda AGUARDANDO_PAGAMENTO: esperado 409 TRANSICAO_INVALIDA."
+    },
+    {
+      "_id": "req_cancelar_pedido", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -60,
+      "name": "T18 - Cancelar pedido (devolve estoque)",
+      "method": "POST", "url": "{{ _.base_url }}/pedidos/{{ _.pedidoId }}/cancelar",
+      "headers": [{ "name": "Authorization", "value": "Bearer {{ _.token }}" }]
+    },
+    {
+      "_id": "req_pedido_sem_canal", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -55,
+      "name": "T05 - Criar pedido sem canalPedido (422)",
+      "method": "POST", "url": "{{ _.base_url }}/pedidos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"unidadeId\": {{ _.unidadeId }},\n  \"itens\": [ { \"produtoId\": {{ _.produtoId }}, \"quantidade\": 1 } ]\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+    {
+      "_id": "req_pedido_404", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -50,
+      "name": "T09 - Pedido com produto inexistente (404)",
+      "method": "POST", "url": "{{ _.base_url }}/pedidos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"canalPedido\": \"APP\",\n  \"unidadeId\": {{ _.unidadeId }},\n  \"itens\": [ { \"produtoId\": 999999, \"quantidade\": 1 } ]\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+    {
+      "_id": "req_pedido_409", "_type": "request", "parentId": "fld_pedidos", "metaSortKey": -45,
+      "name": "T10 - Pedido com estoque insuficiente (409)",
+      "method": "POST", "url": "{{ _.base_url }}/pedidos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"canalPedido\": \"APP\",\n  \"unidadeId\": {{ _.unidadeId }},\n  \"itens\": [ { \"produtoId\": {{ _.produtoId }}, \"quantidade\": 999999 } ]\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+
+    { "_id": "fld_pagamentos", "_type": "request_group", "parentId": "wrk_raizes", "name": "07 - Pagamentos", "metaSortKey": -40 },
+    {
+      "_id": "req_pagar_ok", "_type": "request", "parentId": "fld_pagamentos", "metaSortKey": -100,
+      "name": "T13 - Pagamento mock APROVADO",
+      "method": "POST", "url": "{{ _.base_url }}/pagamentos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"pedidoId\": {{ _.pedidoId }},\n  \"metodo\": \"MOCK\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "description": "Aprova o pagamento e muda o pedido para PAGO."
+    },
+    {
+      "_id": "req_pagar_falha", "_type": "request", "parentId": "fld_pagamentos", "metaSortKey": -90,
+      "name": "T14 - Pagamento mock RECUSADO",
+      "method": "POST", "url": "{{ _.base_url }}/pagamentos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"pedidoId\": {{ _.pedidoId }},\n  \"metodo\": \"MOCK_FALHA\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ],
+      "description": "Recusa: pedido segue AGUARDANDO_PAGAMENTO."
+    },
+    {
+      "_id": "req_pagar_timeout", "_type": "request", "parentId": "fld_pagamentos", "metaSortKey": -80,
+      "name": "T15 - Pagamento mock TIMEOUT (503)",
+      "method": "POST", "url": "{{ _.base_url }}/pagamentos",
+      "body": { "mimeType": "application/json", "text": "{\n  \"pedidoId\": {{ _.pedidoId }},\n  \"metodo\": \"MOCK_TIMEOUT\"\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+    {
+      "_id": "req_pagamentos_pedido", "_type": "request", "parentId": "fld_pagamentos", "metaSortKey": -70,
+      "name": "Historico de pagamentos do pedido",
+      "method": "GET", "url": "{{ _.base_url }}/pagamentos/pedidos/{{ _.pedidoId }}",
+      "headers": [{ "name": "Authorization", "value": "Bearer {{ _.token }}" }]
+    },
+
+    { "_id": "fld_fidelidade", "_type": "request_group", "parentId": "wrk_raizes", "name": "08 - Fidelidade", "metaSortKey": -30 },
+    {
+      "_id": "req_saldo_pontos", "_type": "request", "parentId": "fld_fidelidade", "metaSortKey": -100,
+      "name": "T19 - Consultar saldo de pontos",
+      "method": "GET", "url": "{{ _.base_url }}/fidelidade/saldo",
+      "headers": [{ "name": "Authorization", "value": "Bearer {{ _.token }}" }]
+    },
+    {
+      "_id": "req_resgatar", "_type": "request", "parentId": "fld_fidelidade", "metaSortKey": -90,
+      "name": "Resgatar pontos",
+      "method": "POST", "url": "{{ _.base_url }}/fidelidade/resgates",
+      "body": { "mimeType": "application/json", "text": "{\n  \"pontos\": 10\n}" },
+      "headers": [
+        { "name": "Content-Type", "value": "application/json" },
+        { "name": "Authorization", "value": "Bearer {{ _.token }}" }
+      ]
+    },
+    {
+      "_id": "req_historico_pontos", "_type": "request", "parentId": "fld_fidelidade", "metaSortKey": -80,
+      "name": "Historico de pontos",
+      "method": "GET", "url": "{{ _.base_url }}/fidelidade/historico",
+      "headers": [{ "name": "Authorization", "value": "Bearer {{ _.token }}" }]
+    }
+  ]
+}
